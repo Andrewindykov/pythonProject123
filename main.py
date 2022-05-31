@@ -1,84 +1,175 @@
-class LinkedList:
-    head = None
-    length = 1
+import random
+import pygame
+import pygame.freetype
 
-    class Node:
-        element = None
-        next_node = None
 
-        def __init__(self, element, next_node=None):
-            self.element = element
-            self.next_node = next_node
+def move_player():
+    player.y += player_speed
+    if player.top <= 0:
+        player.top = 0
+    if player.bottom >= SCREEN_HEIGHT:
+        player.bottom = SCREEN_HEIGHT
 
-    def append(self, element):
-        if not self.head:
-            self.head = self.Node(element)
-            return element
-        node = self.head
 
-        while node.next_node:
-            node = node.next_node
+def move_AI():
+    if ball.centerx > SCREEN_WIDTH/2 and ball_dx > 0:
+        if opponent.bottom < ball.top:
+            opponent.y += opponent_speed
+        elif opponent.top > ball.bottom:
+            opponent.y -= opponent_speed
 
-        node.next_node = self.Node(element)
-        self.length += 1
 
-    def out(self):
-        node = self.head
+def move_ball(dx, dy):
+    if ball.top <= 0 or ball.bottom >= SCREEN_HEIGHT:
+        dy = -dy
 
-        while node.next_node:
-            print(node.element)
-            node = node.next_node
-        print(node.element)
+    if ball.colliderect(player) and dx < 0:
+        pong_sound.play()
+        if abs(ball.left - player.right) < 10:
+            dx = -dx
+        elif abs(ball.top - player.bottom) < 10 and dy < 0:
+            dy = -dy
+        elif abs(player.top - ball.bottom) < 10 and dy > 0:
+            dy = -dy
 
-    def insert(self, element, index):
-      i=0
-      node = self.head
-      prev_node = self.head
+    if ball.colliderect(opponent) and dx > 0:
+        pong_sound.play()
+        if abs(ball.right - opponent.left) < 10:
+            dx = -dx
+        elif abs(ball.top - opponent.bottom) < 10 and dy < 0:
+            dy = -dy
+        elif abs(opponent.top - ball.bottom) < 10 and dy > 0:
+            dy = -dy
 
-      while i < index:
-        prev_node = node
-        node = node.next_node
-        i+=1
+    now = pygame.time.get_ticks()
+    if now - score_time > pause_len and not game_is_over:
+        ball.x += dx
+        ball.y += dy
 
-      prev_node.next_node = self.Node(element, next_node=node)
-      self.length += 1
+    return dx, dy
 
-      return element
 
-    def delete(self, index):
-      i = 0
-      node = self.head
-      prev_node = self.head
+def restart_ball(dx, dy):
+    ball.center = SCREEN_WIDTH/2, SCREEN_HEIGHT/2
+    dx = random.choice((random.randint(-ball_max_speed, -3),
+                       random.randint(3, ball_max_speed)))
+    dy = random.choice((random.randint(-ball_max_speed, -3),
+                       random.randint(3, ball_max_speed)))
 
-      while i < index:
-        prev_node = node
-        node = node.next_node
-        i += 1
+    return dx, dy
 
-      prev_node = node.next_node
-      self.length -= 1
 
-      del node
+def play_sound():
+    if player_score == target_score:
+        win_sound.play()
+    elif opponent_score == target_score:
+        lose_sound.play()
+    else:
+        score_sound.play()
 
-      return element
 
-    def get(self, index):
-      i=0
-      node = self.head
+pygame.init()
+SCREEN_WIDTH = 900
+SCREEN_HEIGHT = 500
 
-      while i < index:
-        node = node.next_node
-        i+=1
+# Colors
+BG_COLOR = (50, 50, 50)
+I_PADDLE_COLOR = (20, 120, 80)
+O_PADDLE_COLOR = (120, 20, 80)
+LINE_COLOR = (20, 20, 20)
 
-        return node
+# Rectangles
+player = pygame.Rect(10, SCREEN_HEIGHT/2, 10, 100)
+opponent = pygame.Rect(SCREEN_WIDTH-20, SCREEN_HEIGHT/2, 10, 100)
+ball = pygame.Rect(SCREEN_WIDTH/2-10, SCREEN_HEIGHT/2-10, 20, 20)
 
-linked_list = LinkedList()
-print('-------------')
-linked_list.append(10)
-linked_list.append(7)
-linked_list.append(5)
-linked_list.append(3)
-linked_list.insert(5,1)
+# Other variables
+player_speed = 0
+opponent_speed = 3
+ball_max_speed = 17
+ball_dx, ball_dy = -7, 7
 
-linked_list.out()
-print('len=',linked_list.length)
+score_time = 0
+pause_len = 1000
+player_score, opponent_score = 0, 0
+target_score = 3
+game_is_over = False
+end_text = None
+restart_text = "Press R to Restart"
+
+# Sound effects
+pong_sound = pygame.mixer.Sound('pong.wav')
+score_sound = pygame.mixer.Sound('score.wav')
+win_sound = pygame.mixer.Sound('win.wav')
+lose_sound = pygame.mixer.Sound('lose.wav')
+
+# Screen initialization
+clock = pygame.time.Clock()
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption('Pong')
+main_font = pygame.freetype.Font(None, 42)
+
+# Game loop
+running = True
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+        # Player controls
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_r and game_is_over:
+                game_is_over = False
+                player_score, opponent_score = 0, 0
+
+            if event.key == pygame.K_w:
+                player_speed -= 7
+            elif event.key == pygame.K_s:
+                player_speed += 7
+        if event.type == pygame.KEYUP:
+            if event.key == pygame.K_w:
+                player_speed += 7
+            elif event.key == pygame.K_s:
+                player_speed -= 7
+
+    # Update
+    move_player()
+    move_AI()
+    ball_dx, ball_dy = move_ball(ball_dx, ball_dy)
+
+    if ball.right <= 0:
+        opponent_score += 1
+        if opponent_score == target_score:
+            game_is_over = True
+            end_text = 'YOU LOSE'
+    elif ball.left >= SCREEN_WIDTH:
+        player_score += 1
+        if player_score == target_score:
+            game_is_over = True
+            end_text = 'YOU WIN!'
+
+    if ball.right <= 0 or ball.left >= SCREEN_WIDTH:
+        play_sound()
+        ball_dx, ball_dy = restart_ball(ball_dx, ball_dy)
+        score_time = pygame.time.get_ticks()
+
+    # Draw
+    screen.fill(BG_COLOR)
+    main_font.render_to(screen, (SCREEN_WIDTH/3, 20), str(player_score), (15, 160, 10))
+    main_font.render_to(screen, (SCREEN_WIDTH/1.5, 20), str(opponent_score), (150, 80, 100))
+
+    pygame.draw.rect(screen, I_PADDLE_COLOR, player)
+    pygame.draw.rect(screen, O_PADDLE_COLOR, opponent)
+    pygame.draw.line(screen, LINE_COLOR, (SCREEN_WIDTH/2, 0),
+                                (SCREEN_WIDTH/2, SCREEN_HEIGHT))
+    pygame.draw.ellipse(screen, LINE_COLOR, ball)
+    if game_is_over:
+        main_font.render_to(screen, (SCREEN_WIDTH/2.6, 100), end_text)
+        main_font.render_to(screen, (SCREEN_WIDTH/3.2, 150), restart_text, (255, 0, 0))
+
+        # my_ft_font = pygame.freetype.SysFont('Times New Roman', 50)
+        # my_ft_font.render_to(screen, (10, 10), "Hello world!", (255, 0, 0))
+
+
+    clock.tick(60)
+    pygame.display.flip()
